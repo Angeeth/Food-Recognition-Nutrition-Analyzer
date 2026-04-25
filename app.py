@@ -7,8 +7,9 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing import image
 import pickle
 
-# -------- LOAD MODEL --------
-model = load_model("food_model.h5")
+# -------- LOAD MODELS --------
+model1 = load_model("food_model.h5")
+model2 = load_model("food_model_2.h5")
 
 # -------- LOAD CSV --------
 df = pd.read_csv("nutrition.csv")
@@ -29,19 +30,37 @@ if uploaded_file:
 
     img.save("temp.jpg")
 
-    # -------- STEP 1: CLASSIFICATION --------
+    # -------- STEP 1: PREPROCESS --------
     img_resized = image.load_img("temp.jpg", target_size=(224,224))
     img_array = image.img_to_array(img_resized) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
 
+    # -------- STEP 2: DUAL MODEL PREDICTION --------
     with st.spinner("Analyzing image..."):
-        prediction = model.predict(img_array)
+        pred1 = model1.predict(img_array)
+        pred2 = model2.predict(img_array)
 
-    predicted_index = np.argmax(prediction)
-    confidence = float(np.max(prediction))
-    food = class_names[predicted_index]
+    # Model 1
+    index1 = np.argmax(pred1)
+    conf1 = float(np.max(pred1))
+    food1 = class_names[index1]
 
-    # -------- STEP 2: BASIC COUNT (OpenCV) --------
+    # Model 2
+    index2 = np.argmax(pred2)
+    conf2 = float(np.max(pred2))
+    food2 = class_names[index2]
+
+    # -------- SELECT BEST MODEL --------
+    if conf1 > conf2:
+        food = food1
+        confidence = conf1
+        selected_model = "Model 1 (food_model.h5)"
+    else:
+        food = food2
+        confidence = conf2
+        selected_model = "Model 2 (food_model_2.h5)"
+
+    # -------- STEP 3: BASIC COUNT (OpenCV) --------
     img_cv = cv2.imread("temp.jpg")
     gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
 
@@ -57,13 +76,13 @@ if uploaded_file:
     if auto_count == 0:
         auto_count = 1
 
-
-    # -------- STEP 3: NUTRITION --------
+    # -------- STEP 4: NUTRITION --------
     row = df[df['food'] == food]
 
     st.subheader("Detection Result")
     st.write(f"**Food:** {food}")
     st.write(f"**Confidence:** {confidence*100:.2f}%")
+#    st.write(f"**Selected Model:** {selected_model}")
 
     # -------- USER INPUT --------
     st.subheader("Adjust Quantity")
@@ -92,4 +111,3 @@ if uploaded_file:
 
     else:
         st.warning("Nutrition data not found.")
-
